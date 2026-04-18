@@ -22,7 +22,7 @@ A fully documented Active Directory lab deployed on Microsoft Azure, covering cl
 
 ## Overview
 
-This project establishes a secure, fully operational enterprise network inside Microsoft Azure. Rather than relying on local virtualization, the entire lab was provisioned in the cloud using Azure Virtual Machines, Virtual Networks, subnets, Network Security Groups, and custom routing — bringing the infrastructure closer to what a real enterprise deployment looks like.
+This project establishes a secure, fully operational enterprise network inside Microsoft Azure. Rather than relying on local virtualization, the entire lab was provisioned in the cloud using Azure Virtual Machines, Virtual Networks, subnets, Network Security Groups, and custom routing, bringing the infrastructure closer to what a real enterprise deployment looks like.
 
 The scope covers deploying an Active Directory domain from scratch, configuring core Windows services (DNS, LDAP, ADCS, Kerberos), enforcing access controls through GPOs and delegation, and integrating an IDS/IPS firewall for perimeter protection. The build concludes with a structured attack-testing phase to validate the effectiveness of all deployed controls.
 
@@ -40,6 +40,7 @@ The lab was built entirely on Azure, with each component provisioned and managed
 
 **Virtual Network (VNet)** — A single VNet spans the entire lab environment, divided into subnets that reflect real network segmentation between the DMZ, internal domain network, and management plane.
 
+![My Image](VirtualNetwork.png)
 ![My Image](AdressSpace.png)
 
 **Subnets** — The VNet is split into dedicated subnets: one for the domain infrastructure (DC and workstations), one for the perimeter firewall, and a management subnet for administrative access. This segmentation enforces traffic boundaries at the network layer before any firewall rules apply.
@@ -49,6 +50,8 @@ The lab was built entirely on Azure, with each component provisioned and managed
 **Network Security Groups (NSGs)** — NSGs are attached to each subnet and NIC to control inbound and outbound traffic. Rules are scoped tightly — only the ports and protocols required for AD, Kerberos, DNS, LDAP, and RDP management are permitted.
 
 **Route Tables (UDR)** — Custom User Defined Routes are applied to force all outbound traffic from the internal subnet through the firewall VM, rather than routing directly out through the Azure default gateway. This ensures all traffic passes through the IDS/IPS layer.
+
+![My Image](Route.png)
 
 **Static Private IPs** — All VMs are assigned static private IP addresses to ensure consistent DNS resolution, Kerberos ticket validation, and firewall rule targeting across reboots.
 
@@ -154,6 +157,8 @@ The following services were deployed and configured on the Domain Controller:
 - Initially deployed in IDS mode (monitoring only) to establish a baseline and observe traffic patterns across the virtual network
 - Baseline alerts validated by simulating unauthorized traffic between subnets
 - Switched to IPS mode for active blocking; configured AD attack signatures validated as blocked
+
+![My Image](Suricata.png)
 
 ---
 
