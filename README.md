@@ -17,8 +17,6 @@ A fully documented Active Directory lab deployed on Microsoft Azure, covering cl
 - [Services Configuration](#services-configuration)
 - [Perimeter Defense](#perimeter-defense)
 - [Security Testing](#security-testing)
-- [Project Timeline](#project-timeline)
-- [Deliverables](#deliverables)
 
 ---
 
@@ -36,11 +34,17 @@ The lab was built entirely on Azure, with each component provisioned and managed
 
 **Resource Group** — All resources are scoped under a single resource group for centralized management, cost tracking, and clean teardown.
 
-**Virtual Machines** — Each lab component (Domain Controller, Workstation, Firewall) runs as an Azure VM. Machine sizes were selected to balance cost with the compute requirements of Windows Server 2022 and OPNsense.
+**Virtual Machines** — Each lab component (Domain Controller, Workstation, Firewall) runs as an Azure VM. Machine sizes were selected to balance cost with the compute requirements of Windows Server 2022 and the Firewall.
+
+![My Image](Machines.png)
 
 **Virtual Network (VNet)** — A single VNet spans the entire lab environment, divided into subnets that reflect real network segmentation between the DMZ, internal domain network, and management plane.
 
+![My Image](AdressSpace.png)
+
 **Subnets** — The VNet is split into dedicated subnets: one for the domain infrastructure (DC and workstations), one for the perimeter firewall, and a management subnet for administrative access. This segmentation enforces traffic boundaries at the network layer before any firewall rules apply.
+
+![My Image](Subnets.png)
 
 **Network Security Groups (NSGs)** — NSGs are attached to each subnet and NIC to control inbound and outbound traffic. Rules are scoped tightly — only the ports and protocols required for AD, Kerberos, DNS, LDAP, and RDP management are permitted.
 
@@ -51,20 +55,6 @@ The lab was built entirely on Azure, with each component provisioned and managed
 ---
 
 ## Network Architecture
-
-Internet
-                        |
-                [ Azure VNet ]
-                        |
-          +-------------+-------------+
-          |                           |
-   [ Perimeter Subnet ]       [ Management Subnet ]
-    OPNsense Firewall VM         Admin RDP Access
-    Suricata / Zenarmor
-          |
-   [ Internal Subnet ]
-    Domain Controller (DC)
-    Workstation VM
 
 Traffic from the internal subnet to the internet is routed through the firewall via UDR. NSGs enforce subnet-level access control independently of the firewall. The management subnet is isolated and restricted to administrative IPs only.
 
@@ -86,19 +76,27 @@ Traffic from the internal subnet to the internet is routed through the firewall 
 
 The OU layout follows the Principle of Least Privilege, separating objects to allow targeted GPO application and scoped delegation without granting unnecessary access at the domain level.
 
+```
 securinetsenit.local
+│
 ├── _SERVICE_ACCOUNTS
+│
 ├── COMPUTERS
 │   ├── Workstations
 │   └── Servers
+│
 └── USERS
-├── Admins
-│   ├── DomainAdmins
-│   └── Technical Team
-└── Departments
-├── Finance
-├── Marketing
-└── IT
+    ├── Admins
+    │   ├── DomainAdmins
+    │   └── Technical Team
+    │
+    └── Departments
+        ├── Finance
+        ├── Marketing
+        └── IT
+```
+
+![My Image](UsersAndGroups.png)
 
 ### Delegation of Control
 
@@ -128,6 +126,8 @@ Each GPO is linked to a specific OU to enforce consistent security baselines acr
 | Marketing Environment Policy | USERS/Departments/Marketing | Marketing users | Browser proxy and homepage enforced, registry editing disabled, time zone and network configuration locked |
 | IT Workstations Policy | USERS/Departments/IT | IT staff systems | Developer tools allowed (Wireshark, Nmap), lab PowerShell scripts permitted, PowerShell and privilege escalation auditing enabled |
 
+![My Image](GPOs.png)
+
 ---
 
 ## Services Configuration
@@ -146,9 +146,9 @@ The following services were deployed and configured on the Domain Controller:
 
 ## Perimeter Defense
 
-**OPNsense Firewall (Azure NVA)** — Deployed as a Network Virtual Appliance on Azure. A custom UDR applied to the internal subnet forces all outbound and cross-subnet traffic through the OPNsense VM before it reaches the internet or management plane. Azure IP forwarding was enabled on the firewall VM's NIC to allow it to route traffic it does not originate.
+**Firewall (Azure NVA)** — Deployed as a Network Virtual Appliance on Azure. A custom UDR applied to the internal subnet forces all outbound and cross-subnet traffic through the OPNsense VM before it reaches the internet or management plane. Azure IP forwarding was enabled on the firewall VM's NIC to allow it to route traffic it does not originate.
 
-**NSG + Firewall Layered Defense** — Azure NSGs provide a first layer of stateless filtering at the subnet boundary. OPNsense provides stateful inspection, NAT, and deep packet analysis as a second layer. This mirrors a real-world defense-in-depth architecture.
+**NSG + Firewall Layered Defense** — Azure NSGs provide a first layer of stateless filtering at the subnet boundary. The Firewall provides stateful inspection, NAT, and deep packet analysis as a second layer. This mirrors a real-world defense-in-depth architecture.
 
 **Zenarmor / Suricata IDS/IPS**
 - Initially deployed in IDS mode (monitoring only) to establish a baseline and observe traffic patterns across the virtual network
@@ -173,19 +173,6 @@ The testing phase validated the defense mechanisms implemented across the AD env
 **Network-Level Testing** — Port scans and basic exploit attempts were launched across subnets to validate NSG rules, UDR enforcement, and OPNsense blocking behavior. Traffic that should never reach the DC was confirmed as dropped at the perimeter.
 
 **Firewall / IPS Test** — Suricata signatures were validated against simulated attack traffic; blocked events were confirmed in the IPS logs.
-
----
-
-## Deliverables
-
-- Fully connected three-VM lab running on Azure with VNet, subnets, NSGs, and UDR configured
-- OPNsense firewall deployed as an Azure NVA with Suricata/Zenarmor operational in IPS mode
-- Complete AD design documentation (OU structure, groups, delegation matrix)
-- GPO implementation details with screenshots
-- Kerberos concept writeup and attack simulation results
-- Azure network architecture documentation (VNet layout, subnet design, NSG rules, route tables)
-- Step-by-step installation and configuration walkthrough
-- Final presentation summarizing design decisions, controls, and findings
 
 ---
 
