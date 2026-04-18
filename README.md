@@ -28,6 +28,8 @@ The machines are deployed in a single virtual network and separated using subnet
 
 * Address space: 10.0.0.0/16
 
+![My Image](Adress Space.png)
+
 ### Subnets
 
 * 10.0.1.0/24 – Internal subnet (Domain Controller and Client)
