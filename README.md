@@ -16,6 +16,8 @@ The environment consists of three virtual machines:
 * **FW-01** – Linux-based firewall and routing host
 * **WIN10-01** – Domain-joined client machine
 
+![My Image](Machines.png)
+
 The machines are deployed in a single virtual network and separated using subnets to simulate internal segmentation.
 
 ---
