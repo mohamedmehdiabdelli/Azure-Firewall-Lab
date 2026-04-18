@@ -28,7 +28,7 @@ The machines are deployed in a single virtual network and separated using subnet
 
 * Address space: 10.0.0.0/16
 
-![My Image](Adress Space.png)
+![My Image](AdressSpace.png)
 
 ### Subnets
 
