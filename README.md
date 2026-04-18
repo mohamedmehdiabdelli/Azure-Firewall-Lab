@@ -1,204 +1,193 @@
-# Azure Network and Active Directory Lab
+# Enterprise Infrastructure — Phase 1
+
+A fully documented Active Directory lab deployed on Microsoft Azure, covering cloud infrastructure provisioning, domain deployment, service hardening, perimeter defense, and attack simulation. This project was completed as part of the SecurinetsENIT security track and sits at the intersection of cybersecurity, cloud computing, and enterprise networking.
+
+---
+
+## Table of Contents
+
+- [Overview](#overview)
+- [Cloud Infrastructure](#cloud-infrastructure)
+- [Network Architecture](#network-architecture)
+- [Environment](#environment)
+- [Active Directory Design](#active-directory-design)
+- [OU Structure](#ou-structure)
+- [Delegation of Control](#delegation-of-control)
+- [Group Policy Objects](#group-policy-objects)
+- [Services Configuration](#services-configuration)
+- [Perimeter Defense](#perimeter-defense)
+- [Security Testing](#security-testing)
+- [Project Timeline](#project-timeline)
+- [Deliverables](#deliverables)
+
+---
 
 ## Overview
 
-This project documents the deployment of a small enterprise-style environment in Microsoft Azure. The goal was to build a functional network with centralized identity management, apply security controls, and validate connectivity between systems.
+This project establishes a secure, fully operational enterprise network inside Microsoft Azure. Rather than relying on local virtualization, the entire lab was provisioned in the cloud using Azure Virtual Machines, Virtual Networks, subnets, Network Security Groups, and custom routing — bringing the infrastructure closer to what a real enterprise deployment looks like.
 
-The lab includes virtual network design, virtual machine deployment, Active Directory configuration, group policy enforcement, and network-level troubleshooting.
-
----
-
-## Architecture
-
-The environment consists of three virtual machines:
-
-* **DC-01** – Domain Controller running Active Directory Domain Services
-* **FW-01** – Linux-based firewall and routing host
-* **WIN10-01** – Domain-joined client machine
-
-![My Image](Machines.png)
-
-The machines are deployed in a single virtual network and separated using subnets to simulate internal segmentation.
+The scope covers deploying an Active Directory domain from scratch, configuring core Windows services (DNS, LDAP, ADCS, Kerberos), enforcing access controls through GPOs and delegation, and integrating an IDS/IPS firewall for perimeter protection. The build concludes with a structured attack-testing phase to validate the effectiveness of all deployed controls.
 
 ---
 
-## Azure Network Configuration
+## Cloud Infrastructure
 
-### Virtual Network
+The lab was built entirely on Azure, with each component provisioned and managed through the Azure portal and CLI.
 
-* Address space: 10.0.0.0/16
+**Resource Group** — All resources are scoped under a single resource group for centralized management, cost tracking, and clean teardown.
 
-![My Image](AdressSpace.png)
+**Virtual Machines** — Each lab component (Domain Controller, Workstation, Firewall) runs as an Azure VM. Machine sizes were selected to balance cost with the compute requirements of Windows Server 2022 and OPNsense.
 
-### Subnets
+**Virtual Network (VNet)** — A single VNet spans the entire lab environment, divided into subnets that reflect real network segmentation between the DMZ, internal domain network, and management plane.
 
-* 10.0.1.0/24 – Internal subnet (Domain Controller and Client)
-* 10.0.2.0/24 – External subnet (Firewall interface)
+**Subnets** — The VNet is split into dedicated subnets: one for the domain infrastructure (DC and workstations), one for the perimeter firewall, and a management subnet for administrative access. This segmentation enforces traffic boundaries at the network layer before any firewall rules apply.
 
-### Routing
+**Network Security Groups (NSGs)** — NSGs are attached to each subnet and NIC to control inbound and outbound traffic. Rules are scoped tightly — only the ports and protocols required for AD, Kerberos, DNS, LDAP, and RDP management are permitted.
 
-* Custom routing was configured so that traffic between subnets passes through the firewall
-* IP forwarding was enabled on the firewall VM to allow packet traversal
+**Route Tables (UDR)** — Custom User Defined Routes are applied to force all outbound traffic from the internal subnet through the OPNsense firewall VM, rather than routing directly out through the Azure default gateway. This ensures all traffic passes through the IDS/IPS layer.
 
----
-
-## Virtual Machine Setup
-
-### Domain Controller (DC-01)
-
-* Windows Server deployed in the internal subnet
-* Roles installed:
-
-  * Active Directory Domain Services
-  * DNS Server
-* Promoted to domain controller with the domain:
-
-  * internal.cloudapp.net
+**Static Private IPs** — All VMs are assigned static private IP addresses to ensure consistent DNS resolution, Kerberos ticket validation, and firewall rule targeting across reboots.
 
 ---
 
-### Client Machine (WIN10-01)
+## Network Architecture
 
-* Windows client joined to the domain
-* Configured to use the domain controller as its DNS server
-* Used for testing authentication, policy enforcement, and connectivity
+Internet
+                        |
+                [ Azure VNet ]
+                        |
+          +-------------+-------------+
+          |                           |
+   [ Perimeter Subnet ]       [ Management Subnet ]
+    OPNsense Firewall VM         Admin RDP Access
+    Suricata / Zenarmor
+          |
+   [ Internal Subnet ]
+    Domain Controller (DC)
+    Workstation VM
 
----
-
-### Firewall (FW-01)
-
-* Ubuntu Linux VM with two network interfaces:
-
-  * eth0 (external subnet)
-  * eth1 (internal subnet)
-* Configured for:
-
-  * IP forwarding
-  * Routing between subnets
-  * Packet inspection using tcpdump
+Traffic from the internal subnet to the internet is routed through the firewall via UDR. NSGs enforce subnet-level access control independently of the firewall. The management subnet is isolated and restricted to administrative IPs only.
 
 ---
 
-## Active Directory Configuration
+## Environment
 
-An organizational structure was created to simulate a typical company environment.
-
-### Organizational Units
-
-* IT
-* HR
-* Users
-
-### Security Groups
-
-* IT_Admins
-* HR_Users
-
-### User Accounts
-
-Test user accounts were created and assigned to their respective OUs and groups to validate access control and policy application.
+| Component | Role | OS / Tool | Azure Notes |
+|---|---|---|---|
+| Domain Controller | Primary identity and authentication server | Windows Server 2022 | Deployed as an Azure VM with a static private IP; serves as the DNS resolver for the VNet |
+| Workstation | Standard client endpoint | Windows 10 / 11 | Domain-joined Azure VM on the internal subnet |
+| Firewall | Network security and traffic management | OPNsense + Zenarmor + Suricata | Azure VM acting as a network virtual appliance (NVA); UDR forces internal traffic through this VM |
 
 ---
 
-## Group Policy Configuration
+## Active Directory Design
 
-Group Policies were configured and linked to the appropriate OUs to enforce:
+### OU Structure
 
-* Password complexity and length requirements
-* Account lockout policies
-* Basic workstation restrictions for standard users
-* Security baseline settings
+The OU layout follows the Principle of Least Privilege, separating objects to allow targeted GPO application and scoped delegation without granting unnecessary access at the domain level.
 
-These policies were tested from the client machine after domain join.
+securinetsenit.local
+├── _SERVICE_ACCOUNTS
+├── COMPUTERS
+│   ├── Workstations
+│   └── Servers
+└── USERS
+├── Admins
+│   ├── DomainAdmins
+│   └── Technical Team
+└── Departments
+├── Finance
+├── Marketing
+└── IT
 
----
+### Delegation of Control
 
-## Network Security Configuration
+Control is delegated to security groups rather than individual user accounts to maintain accountability and simplify future modifications.
 
-* Windows Firewall rules were reviewed and adjusted where necessary
-* Azure Network Security Groups were used to control inbound and outbound traffic
-* The firewall VM was used to simulate inspection and control of inter-subnet traffic
+| Group / Role | Target OU(s) | Permissions Granted | Permissions Denied |
+|---|---|---|---|
+| DomainAdmins | Root Domain, All OUs | Full administrative control including DC management, schema modification, and domain-level GPO linking | No restrictions in the lab environment |
+| Technical Team | COMPUTERS/Servers, USERS/Departments/IT | Manage server objects, reset computer accounts, apply GPOs for IT systems, perform routine AD maintenance | Domain-level policy changes, admin account modification, schema changes |
+| Finance Department | USERS/Departments/Finance | Read/write on financial shared folders, logon rights to accounting servers, department-specific GPOs | Software installation, network configuration, access to Marketing or IT data |
+| Marketing Department | USERS/Departments/Marketing | Read/write on marketing drives and collaboration tools, standard GPO-based security settings | Access to Finance or IT systems, system modification, unauthorized software installation |
+| IT Department | USERS/Departments/IT | Elevated permissions to maintain workstations, manage network configs, assist with technical troubleshooting | Schema modifications, domain-level GPO linking, DomainAdmins management |
+| Workstations OU Users | COMPUTERS/Workstations | Standard user permissions for business operations and workstation logon | Administrative privileges, software installation, system configuration changes |
 
----
+### Group Policy Objects
 
-## Testing and Validation
+Each GPO is linked to a specific OU to enforce consistent security baselines across users and computers.
 
-### Connectivity Testing
-
-Basic connectivity was tested using ICMP between machines to verify routing and reachability.
-
-Example:
-
-![Ping Test](screenshots/ping-test.png)
-
----
-
-### Packet Capture
-
-Traffic was analyzed on the firewall using tcpdump to observe packet flow between subnets.
-
-Command used:
-
-```
-tcpdump -i eth1 icmp
-```
-
-Example capture:
-
-![TCPDump](screenshots/tcpdump.png)
-
----
-
-### Routing Verification
-
-Routing tables were checked on both Linux and Windows systems:
-
-* Linux:
-
-  ```
-  ip route
-  ```
-
-* Windows:
-
-  ```
-  route print
-  ```
+| GPO Name | Link Location | Target | Key Settings |
+|---|---|---|---|
+| Default Domain Policy | Domain Root | All Users / Computers | Password complexity enforced, min length 14 chars, max age 45 days, lockout after 5 attempts. Kerberos ticket lifetime: 10 hours |
+| User - Standard Security | USERS/Departments | Finance, Marketing, IT | Screen lock after 10 min idle, Control Panel disabled for Finance/Marketing, CMD/PowerShell restricted for non-IT users |
+| Computer - Hardening | COMPUTERS/Workstations | Domain-joined computers | Windows Firewall enforced, guest accounts disabled, USB auto-run blocked, local admin rights removed |
+| Server - Security Baseline | COMPUTERS/Servers | Domain and service servers | Object access auditing, anonymous SID enumeration disabled, NTLMv2 enforced, PowerShell execution restricted, NTP sync with DC |
+| IT Admin Tools Policy | USERS/Admins/Technical Team | IT administrators | PowerShell execution allowed, remote management enabled, RSAT tools enabled, event log retention enforced |
+| Finance Application Control | USERS/Departments/Finance | Finance users | AppLocker/SRP rules (signed executables only), removable drives disabled, restricted access to financial shares |
+| Marketing Environment Policy | USERS/Departments/Marketing | Marketing users | Browser proxy and homepage enforced, registry editing disabled, time zone and network configuration locked |
+| IT Workstations Policy | USERS/Departments/IT | IT staff systems | Developer tools allowed (Wireshark, Nmap), lab PowerShell scripts permitted, PowerShell and privilege escalation auditing enabled |
 
 ---
 
-## Observations
+## Services Configuration
 
-* Proper routing configuration is critical when introducing a firewall between subnets
-* Traffic may be dropped before reaching the operating system due to cloud-level controls such as Network Security Groups
-* Packet capture tools are useful to determine whether traffic is reaching an interface or being blocked upstream
-* Misconfigurations in routing or security policies can result in silent packet drops and timeouts
+The following services were deployed and configured on the Domain Controller:
 
----
+**DNS / DHCP** — The DC acts as the authoritative DNS server for the domain. The Azure VNet DNS settings were updated to point all VMs to the DC's static private IP rather than Azure's default resolver, ensuring proper AD name resolution across the environment.
 
-## Conclusion
+**LDAP / LDAPS** — Secure LDAP functionality was verified to ensure encrypted directory queries across the internal subnet.
 
-This lab provided hands-on experience with:
+**AD Certificate Services (ADCS)** — An Enterprise Certificate Authority was installed and configured on the DC to support certificate-based operations and future ADCS attack scenarios.
 
-* Deploying infrastructure in Azure
-* Configuring Active Directory and domain services
-* Managing users, groups, and policies
-* Implementing basic network segmentation
-* Troubleshooting connectivity using routing analysis and packet capture
+**Kerberos** — Correct ticket generation (TGT and TGS) was verified using `klist`. SPNs were documented for use in later attack simulations. Azure's network layer was validated to pass Kerberos traffic correctly between domain members.
 
 ---
 
-## Future Work
+## Perimeter Defense
 
-* Add centralized logging and monitoring
-* Integrate a SIEM solution
-* Expand the environment with additional subnets or services
-* Test more advanced firewall rules and inspection techniques
+**OPNsense Firewall (Azure NVA)** — Deployed as a Network Virtual Appliance on Azure. A custom UDR applied to the internal subnet forces all outbound and cross-subnet traffic through the OPNsense VM before it reaches the internet or management plane. Azure IP forwarding was enabled on the firewall VM's NIC to allow it to route traffic it does not originate.
+
+**NSG + Firewall Layered Defense** — Azure NSGs provide a first layer of stateless filtering at the subnet boundary. OPNsense provides stateful inspection, NAT, and deep packet analysis as a second layer. This mirrors a real-world defense-in-depth architecture.
+
+**Zenarmor / Suricata IDS/IPS**
+- Initially deployed in IDS mode (monitoring only) to establish a baseline and observe traffic patterns across the virtual network
+- Baseline alerts validated by simulating unauthorized traffic between subnets
+- Switched to IPS mode for active blocking; configured AD attack signatures validated as blocked
 
 ---
 
-## Author
+## Security Testing
 
-Your Name
-Cloud and Cybersecurity Student
+The testing phase validated the defense mechanisms implemented across the AD environment, the Azure network layer, and the firewall.
+
+**Credential Attacks**
+- AS-REP Roasting — Targeted accounts with pre-authentication intentionally disabled (lab-only condition)
+- Kerberoasting — Exploited weak SPNs on service accounts to test ticket cracking resistance
+- Password Spraying / Brute Force — Used to validate account lockout policy enforcement
+
+**Access Control Validation** — Delegated tasks were attempted from each role to confirm restrictions hold at every OU boundary.
+
+**GPO Enforcement Test** — GPOs were verified to apply correctly on the Workstation VM after domain join and policy refresh.
+
+**Network-Level Testing** — Port scans and basic exploit attempts were launched across subnets to validate NSG rules, UDR enforcement, and OPNsense blocking behavior. Traffic that should never reach the DC was confirmed as dropped at the perimeter.
+
+**Firewall / IPS Test** — Suricata signatures were validated against simulated attack traffic; blocked events were confirmed in the IPS logs.
+
+---
+
+## Deliverables
+
+- Fully connected three-VM lab running on Azure with VNet, subnets, NSGs, and UDR configured
+- OPNsense firewall deployed as an Azure NVA with Suricata/Zenarmor operational in IPS mode
+- Complete AD design documentation (OU structure, groups, delegation matrix)
+- GPO implementation details with screenshots
+- Kerberos concept writeup and attack simulation results
+- Azure network architecture documentation (VNet layout, subnet design, NSG rules, route tables)
+- Step-by-step installation and configuration walkthrough
+- Final presentation summarizing design decisions, controls, and findings
+
+---
+
+*Prepared by Mohamed Mehdi Abdelli — December 2025
 
