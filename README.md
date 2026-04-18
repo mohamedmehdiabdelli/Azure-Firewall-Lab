@@ -48,7 +48,7 @@ The lab was built entirely on Azure, with each component provisioned and managed
 
 **Network Security Groups (NSGs)** — NSGs are attached to each subnet and NIC to control inbound and outbound traffic. Rules are scoped tightly — only the ports and protocols required for AD, Kerberos, DNS, LDAP, and RDP management are permitted.
 
-**Route Tables (UDR)** — Custom User Defined Routes are applied to force all outbound traffic from the internal subnet through the OPNsense firewall VM, rather than routing directly out through the Azure default gateway. This ensures all traffic passes through the IDS/IPS layer.
+**Route Tables (UDR)** — Custom User Defined Routes are applied to force all outbound traffic from the internal subnet through the firewall VM, rather than routing directly out through the Azure default gateway. This ensures all traffic passes through the IDS/IPS layer.
 
 **Static Private IPs** — All VMs are assigned static private IP addresses to ensure consistent DNS resolution, Kerberos ticket validation, and firewall rule targeting across reboots.
 
@@ -66,7 +66,7 @@ Traffic from the internal subnet to the internet is routed through the firewall 
 |---|---|---|---|
 | Domain Controller | Primary identity and authentication server | Windows Server 2022 | Deployed as an Azure VM with a static private IP; serves as the DNS resolver for the VNet |
 | Workstation | Standard client endpoint | Windows 10 / 11 | Domain-joined Azure VM on the internal subnet |
-| Firewall | Network security and traffic management | OPNsense + Zenarmor + Suricata | Azure VM acting as a network virtual appliance (NVA); UDR forces internal traffic through this VM |
+| Firewall | Network security and traffic management | Linux + Zenarmor + Suricata | Azure VM acting as a network virtual appliance (NVA); UDR forces internal traffic through this VM |
 
 ---
 
@@ -146,7 +146,7 @@ The following services were deployed and configured on the Domain Controller:
 
 ## Perimeter Defense
 
-**Firewall (Azure NVA)** — Deployed as a Network Virtual Appliance on Azure. A custom UDR applied to the internal subnet forces all outbound and cross-subnet traffic through the OPNsense VM before it reaches the internet or management plane. Azure IP forwarding was enabled on the firewall VM's NIC to allow it to route traffic it does not originate.
+**Firewall (Azure NVA)** — Deployed as a Network Virtual Appliance on Azure. A custom UDR applied to the internal subnet forces all outbound and cross-subnet traffic through the firewall VM before it reaches the internet or management plane. Azure IP forwarding was enabled on the firewall VM's NIC to allow it to route traffic it does not originate.
 
 **NSG + Firewall Layered Defense** — Azure NSGs provide a first layer of stateless filtering at the subnet boundary. The Firewall provides stateful inspection, NAT, and deep packet analysis as a second layer. This mirrors a real-world defense-in-depth architecture.
 
@@ -170,7 +170,7 @@ The testing phase validated the defense mechanisms implemented across the AD env
 
 **GPO Enforcement Test** — GPOs were verified to apply correctly on the Workstation VM after domain join and policy refresh.
 
-**Network-Level Testing** — Port scans and basic exploit attempts were launched across subnets to validate NSG rules, UDR enforcement, and OPNsense blocking behavior. Traffic that should never reach the DC was confirmed as dropped at the perimeter.
+**Network-Level Testing** — Port scans and basic exploit attempts were launched across subnets to validate NSG rules, UDR enforcement, and firewall blocking behavior. Traffic that should never reach the DC was confirmed as dropped at the perimeter.
 
 **Firewall / IPS Test** — Suricata signatures were validated against simulated attack traffic; blocked events were confirmed in the IPS logs.
 
